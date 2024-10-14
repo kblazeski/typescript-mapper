@@ -34,14 +34,6 @@ interface MapperObject {
   }[]
 }
 
-const config: Map<string, string> = new Map()
-
-export class TypeScriptMapper {
-  static addMapping<Source, Target>(sourcePath: string, targetPath: string) {
-    config.set(sourcePath, targetPath)
-  }
-}
-
 const generateObjectsForInterfacesInFile = (fileLocation: string): InterfaceObject[] => {
   const program = ts.createProgram([fileLocation], { allowJs: true, strictNullChecks: true })
   const typeChecker = program.getTypeChecker()
@@ -167,14 +159,89 @@ const generateMappersForInterfaces = (
   return mapperObjects
 }
 
-export const generateMappers = (outputFile: string): void => {
-  const templateFile = fs.readFileSync('./src/generated/mapper.handlebars')
-  const modelObjects = generateObjectsForInterfacesInFile(typeAFiles)
-  const viewModelObjects = generateObjectsForInterfacesInFile(typeBFiles)
+export const generateMapper = (templateFile: string, sourceLocation: string, targetLocation: string): string => {
+  const modelObjects = generateObjectsForInterfacesInFile(sourceLocation)
+  const viewModelObjects = generateObjectsForInterfacesInFile(targetLocation)
 
   const mappersModelToViewModel = generateMappersForInterfaces(modelObjects, viewModelObjects)
 
-  const template = hb.compile(templateFile.toString('utf-8'))
+  const template = hb.compile(templateFile)
 
-  fs.writeFileSync(outputFile, template(mappersModelToViewModel))
+  const mapper = template(mappersModelToViewModel)
+
+  return mapper
+}
+
+// Util function, extract them
+const isArray = (value: unknown): boolean => {
+  return value != null && Array.isArray(value)
+}
+
+// Util function, extract them
+const isObject = (value: unknown): boolean => {
+  return typeof value === 'object' && !Array.isArray(value) && value !== null
+}
+
+// Util function, extract them
+const isObjectOfTypeSourceTargetLocations = (value: unknown): boolean => {
+  if (isObject(value)) {
+    const objectValue = value as Record<string, any>
+
+    const hasProps = 'source' in objectValue && 'target' in objectValue
+
+    if (hasProps) {
+      const sourceValue = objectValue['source']
+      const targetValue = objectValue['target']
+
+      return typeof sourceValue === 'string' && typeof targetValue === 'string'
+    }
+  }
+  return false
+}
+
+// Util function, extract them
+const extractMapForSourcesAndTarget = (jsonFileWithMappings: string): Map<string, string> => {
+  const map: Map<string, string> = new Map()
+
+  const array = JSON.parse(jsonFileWithMappings)
+
+  if (!isArray(array)) {
+    throw new Error('The value in the json file is not array as expected')
+  }
+
+  array.forEach((item: any) => {
+    if (!isObjectOfTypeSourceTargetLocations(item)) {
+      throw new Error('The value inside of the array is not the expected type of object')
+    }
+    map.set(item['source'], item['target'])
+  })
+
+  return map
+}
+
+export const generateMappers = (mappingSpecFileLocation: string, outputFileLocation: string): void => {
+  if (!fs.existsSync(mappingSpecFileLocation)) {
+    console.error('You need to specify a json config file with the mapping specification')
+    return
+  }
+
+  const mappingsFile = fs.readFileSync(mappingSpecFileLocation).toString('utf-8')
+  const templateFile = fs.readFileSync('./src/template.handlebars').toString('utf-8')
+
+  let mappingsConfig: Map<string, string>
+
+  try {
+    mappingsConfig = extractMapForSourcesAndTarget(mappingsFile)
+  } catch (error: any) {
+    console.error(error?.message)
+    return
+  }
+
+  for (const [sourceLocation, targetLocation] of mappingsConfig) {
+    if (fs.existsSync(sourceLocation) && fs.existsSync(targetLocation)) {
+      const mapperContent = generateMapper(templateFile, sourceLocation, targetLocation)
+
+      fs.writeFileSync(outputFileLocation, mapperContent)
+    }
+  }
 }

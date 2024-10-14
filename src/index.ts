@@ -1,3 +1,3 @@
-import { TypeScriptMapper } from 'src/Mapper'
+import { generateMappers } from 'src/Mapper'
 
-export { TypeScriptMapper }
+export default generateMappers

@@ -1,0 +1,37 @@
+{{#each this}}
+export function map{{this.modelType}}To{{this.viewModelType}}(
+  model: {{this.modelType}},
+  customMap{{#this.customMapOptional}}?{{/this.customMapOptional}}: {
+    {{#each this.customMapProps}}
+     {{this.propName}}{{#this.isOptional}}?{{/this.isOptional}}: (model: {{../this.modelType}}) => {{this.returnType}}
+    {{/each}}
+  }
+  ): {{this.viewModelType}} {
+  const viewModel = {
+      {{#each autoMapProps}}
+      {{this}}: model.{{this}}, 
+      {{/each}}
+  } as {{this.viewModelType}}
+
+  {{#if this.customMapOptional}}
+  if(customMap) {
+    const customMapKeys = Object.keys(customMap) as Array<keyof typeof customMap>
+    customMapKeys.forEach((key) => {
+      if (customMap[key]) {
+          viewModel[key] = customMap[key](model) as never
+      }
+    })
+  }
+  {{else}}
+  const customMapKeys = Object.keys(customMap) as Array<keyof typeof customMap>
+
+  customMapKeys.forEach((key) => {
+    if (customMap[key]) {
+        viewModel[key] = customMap[key](model) as never
+    }
+  })
+  {{/if}}
+
+  return viewModel
+}
+{{/each}}
