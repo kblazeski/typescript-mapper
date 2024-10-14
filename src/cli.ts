@@ -13,7 +13,7 @@ type ArgvResult = Arguments<{
 }>
 
 const argv = yargs(hideBin(process.argv))
-  .alias('s', 'mappings specification')
+  .alias('s', 'mappingFile')
   .describe('s', 'Mapping specification file path.')
   .alias('o', 'output')
   .describe('o', 'Output directory.')

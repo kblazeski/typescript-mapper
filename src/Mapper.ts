@@ -1,13 +1,8 @@
 import fs from 'fs'
-import * as hb from 'handlebars'
+import hb from 'handlebars'
+import path from 'path'
 import * as ts from 'typescript'
-
-// TODO: add structured clone
-
-// const modelFileLocation = './src/model/Organization.ts'
-// const viewModelFileLocation = './src/view-model/OrganizationViewModel.ts'
-
-// const outputFile = './src/generated/mapper.ts'
+import { fileURLToPath } from 'url'
 
 interface PropObject {
   type: string
@@ -225,8 +220,11 @@ export const generateMappers = (mappingSpecFileLocation: string, outputFileLocat
     return
   }
 
+  const __filename = fileURLToPath(import.meta.url)
+  const __dirname = path.dirname(__filename)
+
   const mappingsFile = fs.readFileSync(mappingSpecFileLocation).toString('utf-8')
-  const templateFile = fs.readFileSync('./src/template.handlebars').toString('utf-8')
+  const templateFile = fs.readFileSync(path.resolve(__dirname, 'template.handlebars')).toString('utf-8')
 
   let mappingsConfig: Map<string, string>
 
