@@ -1,0 +1,52 @@
+{
+  "name": "typescript-mapper",
+  "version": "0.0.1",
+  "description": "TypeScript mapper for objects of type A to type B and vice versa ",
+  "exports": {
+    "import": "./dist/mjs/index.js",
+    "require": "./dist/cjs/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "bin": {
+    "generate-mappers": "dist/cli.js"
+  },
+  "scripts": {
+    "tsc": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "runIndex": "ts-node src/index",
+    "build": "rollup -c"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kblazeski/typescript-mapper.git"
+  },
+  "keywords": [
+    "typescript",
+    "mapper",
+    "npm"
+  ],
+  "author": "Kiril Blazheski",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kblazeski/typescript-mapper/issues"
+  },
+  "homepage": "https://github.com/kblazeski/typescript-mapper#readme",
+  "dependencies": {
+    "handlebars": "^4.7.8",
+    "typescript": "^5.6.3",
+    "typescript-mapper": "file:",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@types/node": "^22.7.5",
+    "@types/yargs": "^17.0.33",
+    "prettier": "^3.3.3",
+    "rollup": "^4.24.0",
+    "ts-node": "^10.9.2",
+    "tslib": "^2.7.0"
+  }
+}
