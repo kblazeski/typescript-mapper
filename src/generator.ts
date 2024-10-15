@@ -178,8 +178,9 @@ const extractConfigFileEntries = (configFileContent: string): ConfigFileEntriesT
 
 export const generateMappers = (configForMappingFilesLocation: string, outputFileLocation: string): void => {
   if (!fs.existsSync(configForMappingFilesLocation)) {
-    console.error('You need to specify a JSON config file with the mapping specification')
-    return
+    const errorMessage = 'You need to specify a JSON config file with the mapping specification'
+    console.error(errorMessage)
+    throw new Error(errorMessage)
   }
 
   const __filename = fileURLToPath(import.meta.url)
@@ -194,20 +195,27 @@ export const generateMappers = (configForMappingFilesLocation: string, outputFil
     configFileEntries = extractConfigFileEntries(mappingsFile)
   } catch (error: any) {
     console.error(error?.message)
-    return
+    throw error
   }
 
   for (const [sourceLocation, targetLocation, viceVersa] of configFileEntries) {
+    const writer = fs.createWriteStream(outputFileLocation)
     if (fs.existsSync(sourceLocation) && fs.existsSync(targetLocation)) {
       const [sources, targets] = generateObjectsForSourcesAndTarget(sourceLocation, targetLocation)
       let mapperContent = generateMapper(templateFile, sources, targets)
 
+      console.log(`Mapping from source: "${sourceLocation}" to target: "${targetLocation}"`)
+
       if (viceVersa) {
-        const viceVersaContent =  generateMapper(templateFile, targets, sources)
+        const viceVersaContent = generateMapper(templateFile, targets, sources)
         mapperContent = mapperContent + '\n' + viceVersaContent
+
+        console.log(`Mapping from source: "${targetLocation}" to target: "${sourceLocation}"`)
       }
 
-      fs.writeFileSync(outputFileLocation, mapperContent)
+      writer.write(mapperContent)
     }
+
+    writer.close()
   }
 }
