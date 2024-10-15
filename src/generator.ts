@@ -203,7 +203,8 @@ export const generateMappers = (configForMappingFilesLocation: string, outputFil
       let mapperContent = generateMapper(templateFile, sources, targets)
 
       if (viceVersa) {
-        mapperContent = '\n' + generateMapper(templateFile, targets, sources)
+        const viceVersaContent =  generateMapper(templateFile, targets, sources)
+        mapperContent = mapperContent + '\n' + viceVersaContent
       }
 
       fs.writeFileSync(outputFileLocation, mapperContent)
