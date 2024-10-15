@@ -18,7 +18,7 @@ export function map{{this.sourceType}}To{{this.targetType}}(
     const customMapKeys = Object.keys(customMap) as Array<keyof typeof customMap>
     customMapKeys.forEach((key) => {
       if (customMap[key]) {
-          target[key] = customMap[key](source) as never
+          target[key] = (customMap[key] as any)(source) as never
       }
     })
   }
@@ -27,7 +27,7 @@ export function map{{this.sourceType}}To{{this.targetType}}(
 
   customMapKeys.forEach((key) => {
     if (customMap[key]) {
-        target[key] = customMap[key](source) as never
+        target[key] = (customMap[key] as any)(source) as never
     }
   })
   {{/if}}
