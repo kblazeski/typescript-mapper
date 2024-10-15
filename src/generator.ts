@@ -198,8 +198,9 @@ export const generateMappers = (configForMappingFilesLocation: string, outputFil
     throw error
   }
 
+  const writer = fs.createWriteStream(outputFileLocation)
+
   for (const [sourceLocation, targetLocation, viceVersa] of configFileEntries) {
-    const writer = fs.createWriteStream(outputFileLocation)
     if (fs.existsSync(sourceLocation) && fs.existsSync(targetLocation)) {
       const [sources, targets] = generateObjectsForSourcesAndTarget(sourceLocation, targetLocation)
       let mapperContent = generateMapper(templateFile, sources, targets)
@@ -215,7 +216,6 @@ export const generateMappers = (configForMappingFilesLocation: string, outputFil
 
       writer.write(mapperContent)
     }
-
-    writer.close()
   }
+  writer.close()
 }
