@@ -1,24 +1,24 @@
 {{#each this}}
-export function map{{this.modelType}}To{{this.viewModelType}}(
-  model: {{this.modelType}},
+export function map{{this.sourceType}}To{{this.targetType}}(
+  source: {{this.sourceType}},
   customMap{{#this.customMapOptional}}?{{/this.customMapOptional}}: {
     {{#each this.customMapProps}}
-     {{this.propName}}{{#this.isOptional}}?{{/this.isOptional}}: (model: {{../this.modelType}}) => {{this.returnType}}
+     {{this.propName}}{{#this.isOptional}}?{{/this.isOptional}}: (source: {{../this.sourceType}}) => {{this.returnType}}
     {{/each}}
   }
-  ): {{this.viewModelType}} {
-  const viewModel = {
+  ): {{this.targetType}} {
+  const target = {
       {{#each autoMapProps}}
-      {{this}}: model.{{this}}, 
+      {{this}}: source.{{this}}, 
       {{/each}}
-  } as {{this.viewModelType}}
+  } as {{this.targetType}}
 
   {{#if this.customMapOptional}}
   if(customMap) {
     const customMapKeys = Object.keys(customMap) as Array<keyof typeof customMap>
     customMapKeys.forEach((key) => {
       if (customMap[key]) {
-          viewModel[key] = customMap[key](model) as never
+          target[key] = customMap[key](source) as never
       }
     })
   }
@@ -27,11 +27,11 @@ export function map{{this.modelType}}To{{this.viewModelType}}(
 
   customMapKeys.forEach((key) => {
     if (customMap[key]) {
-        viewModel[key] = customMap[key](model) as never
+        target[key] = customMap[key](source) as never
     }
   })
   {{/if}}
 
-  return viewModel
+  return target
 }
 {{/each}}

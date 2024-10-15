@@ -22,11 +22,11 @@ const argv = yargs(hideBin(process.argv))
   .alias('h', 'help')
   .epilog('copyright 2024').argv as ArgvResult
 
-const mappingFileSpecPath = path.resolve(process.cwd(), argv.config)
+const configForMappingFilesLocation = path.resolve(process.cwd(), argv.config)
 const outputPath = path.resolve(process.cwd(), argv.output)
 
-if (!fs.existsSync(mappingFileSpecPath)) {
+if (!fs.existsSync(configForMappingFilesLocation)) {
   console.error('You need to specify a json mapping file location')
 }
 
-generateMappers(mappingFileSpecPath, outputPath)
+generateMappers(configForMappingFilesLocation, outputPath)

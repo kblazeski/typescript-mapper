@@ -1,34 +1,10 @@
 import fs from 'fs'
 import hb from 'handlebars'
 import path from 'path'
+import { ConfigFileEntriesTuple, InterfaceObject, MapperObject, PropObject } from 'src/types'
 import { isArray, isObjectOfTypeSourceTargetLocations } from 'src/utils'
 import * as ts from 'typescript'
 import { fileURLToPath } from 'url'
-
-interface PropObject {
-  type: string
-  hasQuestionMark: boolean
-}
-
-interface InterfaceObject {
-  name: string
-  props: {
-    [key: string]: PropObject
-  }
-}
-
-// Object representation passed to handlebars for generating template
-interface MapperObject {
-  modelType: string
-  viewModelType: string
-  customMapOptional: boolean
-  autoMapProps: string[]
-  customMapProps: {
-    propName: string
-    returnType: string
-    isOptional: boolean
-  }[]
-}
 
 const generateObjectsForInterfacesInFile = (fileLocation: string): InterfaceObject[] => {
   const program = ts.createProgram([fileLocation], { allowJs: true, strictNullChecks: true })
@@ -90,57 +66,57 @@ const filterNullableUnionTypes = (type?: PropObject['type']): string | undefined
 // if from is not nullable and to is nullable -> can be mapped
 // if from is not nullable and to is not nullable -> can be mapped
 const generateMappersForInterfaces = (
-  modelObjects: InterfaceObject[],
-  viewModelObjects: InterfaceObject[],
+  sourceObjects: InterfaceObject[],
+  targetObjects: InterfaceObject[],
 ): MapperObject[] => {
   const mapperObjects: MapperObject[] = []
-  modelObjects.forEach((modelObject) => {
-    viewModelObjects.forEach((viewModelObject) => {
+  sourceObjects.forEach((sourceObject) => {
+    targetObjects.forEach((targetObject) => {
       const mapperObject: MapperObject = {
-        modelType: modelObject.name,
-        viewModelType: viewModelObject.name,
+        sourceType: sourceObject.name,
+        targetType: targetObject.name,
         customMapOptional: true,
         autoMapProps: [],
         customMapProps: [],
       }
 
-      const modelObjectProps = modelObject.props
-      const viewModelObjectProps = viewModelObject.props
+      const sourceObjectProps = sourceObject.props
+      const targetObjectProps = targetObject.props
 
-      const viewModelObjectPropsKeys = Object.keys(viewModelObjectProps)
+      const targetObjectPropsKeys = Object.keys(targetObjectProps)
 
       // auto mapped properties
       const autoMapProps = new Set<string>()
       const customMapProps: MapperObject['customMapProps'] = []
 
-      viewModelObjectPropsKeys.forEach((prop) => {
-        const viewModelProp = viewModelObjectProps[prop]
-        const modelProp = modelObjectProps[prop]
+      targetObjectPropsKeys.forEach((prop) => {
+        const targetProp = targetObjectProps[prop]
+        const sourceProp = sourceObjectProps[prop]
 
-        const viewModelPropType = viewModelProp.type
-        const modelPropType = modelProp?.type
+        const targetPropType = targetProp.type
+        const sourcePropType = sourceProp?.type
 
-        const viewModelPropTypeWithoutNullableTypes = filterNullableUnionTypes(viewModelPropType)
-        const modelPropTypeWithoutNullableTypes = filterNullableUnionTypes(modelPropType)
+        const targetPropTypeWithoutNullableTypes = filterNullableUnionTypes(targetPropType)
+        const sourcePropTypeWithoutNullableTypes = filterNullableUnionTypes(sourcePropType)
 
-        const viewModelPropNullable = isTypeNullable(viewModelPropType, viewModelProp.hasQuestionMark)
-        const modelPropNullable = isTypeNullable(modelPropType, modelProp?.hasQuestionMark)
+        const targetPropNullable = isTypeNullable(targetPropType, targetProp.hasQuestionMark)
+        const sourcePropNullable = isTypeNullable(sourcePropType, sourceProp?.hasQuestionMark)
 
-        if (prop in modelObjectProps && viewModelPropTypeWithoutNullableTypes === modelPropTypeWithoutNullableTypes) {
+        if (prop in sourceObjectProps && targetPropTypeWithoutNullableTypes === sourcePropTypeWithoutNullableTypes) {
           // TODO: refactor this
           // if from is nullable and to expects non nullable -> we add custom value (dont map but expect customMap)
-          if (modelPropNullable && !viewModelPropNullable) {
+          if (sourcePropNullable && !targetPropNullable) {
             customMapProps.push({
               propName: prop,
-              returnType: getReturnType(viewModelProp),
+              returnType: getReturnType(targetProp),
               isOptional: false,
             })
           } else {
             autoMapProps.add(prop)
-            customMapProps.push({ propName: prop, returnType: getReturnType(viewModelProp), isOptional: true })
+            customMapProps.push({ propName: prop, returnType: getReturnType(targetProp), isOptional: true })
           }
         } else {
-          customMapProps.push({ propName: prop, returnType: getReturnType(viewModelProp), isOptional: false })
+          customMapProps.push({ propName: prop, returnType: getReturnType(targetProp), isOptional: false })
         }
       })
 
@@ -155,23 +131,34 @@ const generateMappersForInterfaces = (
   return mapperObjects
 }
 
-export const generateMapper = (templateFile: string, sourceLocation: string, targetLocation: string): string => {
-  const modelObjects = generateObjectsForInterfacesInFile(sourceLocation)
-  const viewModelObjects = generateObjectsForInterfacesInFile(targetLocation)
+export const generateObjectsForSourcesAndTarget = (
+  sourceLocation: string,
+  targetLocation: string,
+): [InterfaceObject[], InterfaceObject[]] => {
+  const sourceObjects = generateObjectsForInterfacesInFile(sourceLocation)
+  const targetObjects = generateObjectsForInterfacesInFile(targetLocation)
 
-  const mappersModelToViewModel = generateMappersForInterfaces(modelObjects, viewModelObjects)
+  return [sourceObjects, targetObjects]
+}
+
+export const generateMapper = (
+  templateFile: string,
+  sources: InterfaceObject[],
+  targets: InterfaceObject[],
+): string => {
+  const mapperObjects = generateMappersForInterfaces(sources, targets)
 
   const template = hb.compile(templateFile)
 
-  const mapper = template(mappersModelToViewModel)
+  const mapper = template(mapperObjects)
 
   return mapper
 }
 
-const extractMapForSourcesAndTarget = (jsonFileWithMappings: string): Map<string, string> => {
-  const map: Map<string, string> = new Map()
+const extractConfigFileEntries = (configFileContent: string): ConfigFileEntriesTuple[] => {
+  const tuplesArray: Array<ConfigFileEntriesTuple> = []
 
-  const array = JSON.parse(jsonFileWithMappings)
+  const array = JSON.parse(configFileContent)
 
   if (!isArray(array)) {
     throw new Error('The value in the json file is not array as expected')
@@ -181,36 +168,43 @@ const extractMapForSourcesAndTarget = (jsonFileWithMappings: string): Map<string
     if (!isObjectOfTypeSourceTargetLocations(item)) {
       throw new Error('The value inside of the array is not the expected type of object')
     }
-    map.set(item['source'], item['target'])
+    tuplesArray.push([item['source'], item['target'], item['viceVersa']])
   })
 
-  return map
+  const uniqueEntries = new Set(tuplesArray.map((item) => JSON.stringify(item)))
+
+  return Array.from(uniqueEntries).map((item) => JSON.parse(item)) as ConfigFileEntriesTuple[]
 }
 
-export const generateMappers = (mappingSpecFileLocation: string, outputFileLocation: string): void => {
-  if (!fs.existsSync(mappingSpecFileLocation)) {
-    console.error('You need to specify a json config file with the mapping specification')
+export const generateMappers = (configForMappingFilesLocation: string, outputFileLocation: string): void => {
+  if (!fs.existsSync(configForMappingFilesLocation)) {
+    console.error('You need to specify a JSON config file with the mapping specification')
     return
   }
 
   const __filename = fileURLToPath(import.meta.url)
   const __dirname = path.dirname(__filename)
 
-  const mappingsFile = fs.readFileSync(mappingSpecFileLocation).toString('utf-8')
+  const mappingsFile = fs.readFileSync(configForMappingFilesLocation).toString('utf-8')
   const templateFile = fs.readFileSync(path.resolve(__dirname, 'template.handlebars')).toString('utf-8')
 
-  let mappingsConfig: Map<string, string>
+  let configFileEntries: ConfigFileEntriesTuple[]
 
   try {
-    mappingsConfig = extractMapForSourcesAndTarget(mappingsFile)
+    configFileEntries = extractConfigFileEntries(mappingsFile)
   } catch (error: any) {
     console.error(error?.message)
     return
   }
 
-  for (const [sourceLocation, targetLocation] of mappingsConfig) {
+  for (const [sourceLocation, targetLocation, viceVersa] of configFileEntries) {
     if (fs.existsSync(sourceLocation) && fs.existsSync(targetLocation)) {
-      const mapperContent = generateMapper(templateFile, sourceLocation, targetLocation)
+      const [sources, targets] = generateObjectsForSourcesAndTarget(sourceLocation, targetLocation)
+      let mapperContent = generateMapper(templateFile, sources, targets)
+
+      if (viceVersa) {
+        mapperContent = '\n' + generateMapper(templateFile, targets, sources)
+      }
 
       fs.writeFileSync(outputFileLocation, mapperContent)
     }

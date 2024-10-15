@@ -15,8 +15,9 @@ export const isObjectOfTypeSourceTargetLocations = (value: unknown): boolean => 
     if (hasProps) {
       const sourceValue = objectValue['source']
       const targetValue = objectValue['target']
+      const viceVersaValidType = 'viceVersa' in objectValue ? typeof objectValue['viceVersa'] === 'boolean' : true
 
-      return typeof sourceValue === 'string' && typeof targetValue === 'string'
+      return typeof sourceValue === 'string' && typeof targetValue === 'string' && viceVersaValidType
     }
   }
   return false
