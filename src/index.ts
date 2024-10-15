@@ -1,3 +1,3 @@
-import { generateMappers } from 'src/Mapper'
+import { generateMappers } from 'src/generator'
 
 export default generateMappers
