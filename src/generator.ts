@@ -13,27 +13,35 @@ const generateObjectsForInterfacesInFile = (fileLocation: string): InterfaceObje
 
   const interfaceObjects: InterfaceObject[] = []
 
-  // Loop through the root AST nodes of the file
-  ts.forEachChild(sourceFile as ts.Node, (node) => {
-    if (ts.isInterfaceDeclaration(node)) {
-      const interfaceObject: InterfaceObject = {
-        name: node.name.text,
-        props: {},
-      }
-
-      node.members.forEach((prop) => {
-        const name = (prop.name as any)?.escapedText
-        const type = (prop as any)?.type
-
-        interfaceObject.props[name] = {
-          type: typeChecker.typeToString(typeChecker.getTypeAtLocation(type)),
-          hasQuestionMark: Boolean(prop.questionToken),
+  const traverseNode = (node: ts.Node) => {
+    if (node.kind === ts.SyntaxKind.ExportKeyword) {
+      const parent = node.parent
+      if (ts.isInterfaceDeclaration(parent)) {
+        const interfaceObject: InterfaceObject = {
+          name: parent.name.text,
+          props: {},
         }
-      })
 
-      interfaceObjects.push(interfaceObject)
+        parent.members.forEach((prop) => {
+          const name = (prop.name as any)?.escapedText
+          const type = (prop as any)?.type
+
+          interfaceObject.props[name] = {
+            type: typeChecker.typeToString(typeChecker.getTypeAtLocation(type)),
+            hasQuestionMark: Boolean(prop.questionToken),
+          }
+        })
+
+        interfaceObjects.push(interfaceObject)
+      }
     }
-  })
+
+    // Loop through the root AST nodes of the file
+    ts.forEachChild(node, traverseNode)
+  }
+
+  traverseNode(sourceFile as ts.Node)
+
   return interfaceObjects
 }
 
