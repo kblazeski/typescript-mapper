@@ -22,3 +22,7 @@ export const isObjectOfTypeSourceTargetLocations = (value: unknown): boolean => 
   }
   return false
 }
+
+export const escapeQuotationMarks = (text: string): string => {
+  return text.replaceAll("'", '').replaceAll('"', '')
+}

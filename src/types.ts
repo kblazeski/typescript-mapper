@@ -6,6 +6,7 @@ export type ConfigFileEntriesTuple = [Source, Destination, ViceVersa]
 export type Import = string
 
 export interface ImportObject {
+  sourceFilePath: string
   importText: Import
   path: string
   wasRelative: boolean
