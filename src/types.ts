@@ -3,6 +3,14 @@ type Destination = string
 type ViceVersa = boolean | undefined
 export type ConfigFileEntriesTuple = [Source, Destination, ViceVersa]
 
+export type Import = string
+
+export interface ImportObject {
+  importText: Import
+  path: string
+  wasRelative: boolean
+}
+
 export interface PropObject {
   type: string
   hasQuestionMark: boolean
@@ -26,4 +34,9 @@ export interface MapperObject {
     returnType: string
     isOptional: boolean
   }[]
+}
+
+export interface TemplateObject {
+  imports: string[]
+  mappers: MapperObject[]
 }
