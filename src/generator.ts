@@ -47,7 +47,7 @@ const generateObjectsAndImportsForInterfacesInFile = (fileLocation: string): [In
 
     if (ts.isImportDeclaration(node)) {
       const importPath = escapeQuotationMarks(node.moduleSpecifier.getText())
-      
+
       importObjects.push({
         sourceFilePath: fileLocation,
         importText: node.getFullText(),
@@ -205,7 +205,6 @@ export const getImportForTheInterfaces = (
   }
 }
 
-// TODO: only transforms them relative to the source path, not the the mappings.ts
 const transformImportPaths = (importObjects: ImportObject[], outputFilePath: string): string[] => {
   // transform relative paths in the source file to fit the relative path in the destination file of mappers
   const transformedRelativePaths = importObjects.map((item) => {
