@@ -1,4 +1,4 @@
-{{#each this}}
+
 export function map{{this.sourceType}}To{{this.targetType}}(
   source: {{this.sourceType}},
   customMap{{#this.customMapOptional}}?{{/this.customMapOptional}}: {
@@ -34,4 +34,3 @@ export function map{{this.sourceType}}To{{this.targetType}}(
 
   return target
 }
-{{/each}}

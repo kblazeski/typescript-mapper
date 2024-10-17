@@ -1,17 +1,26 @@
 import fs from 'fs'
 import hb from 'handlebars'
 import path from 'path'
-import { ConfigFileEntriesTuple, InterfaceObject, MapperObject, PropObject } from 'src/types'
-import { isArray, isObjectOfTypeSourceTargetLocations } from 'src/utils'
+import { findRelativePath, isPathRelative, joinPaths } from 'src/path-utils'
+import {
+  ConfigFileEntriesTuple,
+  ImportObject,
+  InterfaceObject,
+  MapperObject,
+  PropObject,
+  TemplateObject,
+} from 'src/types'
+import { escapeQuotationMarks, isArray, isObjectOfTypeSourceTargetLocations } from 'src/utils'
 import * as ts from 'typescript'
 import { fileURLToPath } from 'url'
 
-const generateObjectsForInterfacesInFile = (fileLocation: string): InterfaceObject[] => {
+const generateObjectsAndImportsForInterfacesInFile = (fileLocation: string): [InterfaceObject[], ImportObject[]] => {
   const program = ts.createProgram([fileLocation], { allowJs: true, strictNullChecks: true })
   const typeChecker = program.getTypeChecker()
   const sourceFile = program.getSourceFile(fileLocation)
 
   const interfaceObjects: InterfaceObject[] = []
+  const importObjects: ImportObject[] = []
 
   const traverseNode = (node: ts.Node) => {
     if (node.kind === ts.SyntaxKind.ExportKeyword) {
@@ -36,13 +45,24 @@ const generateObjectsForInterfacesInFile = (fileLocation: string): InterfaceObje
       }
     }
 
+    if (ts.isImportDeclaration(node)) {
+      const importPath = escapeQuotationMarks(node.moduleSpecifier.getText())
+
+      importObjects.push({
+        sourceFilePath: fileLocation,
+        importText: node.getFullText(),
+        path: importPath,
+        wasRelative: isPathRelative(importPath),
+      })
+    }
+
     // Loop through the root AST nodes of the file
     ts.forEachChild(node, traverseNode)
   }
 
   traverseNode(sourceFile as ts.Node)
 
-  return interfaceObjects
+  return [interfaceObjects, importObjects]
 }
 
 const isTypeNullable = (type: string | null | undefined, hasQuestionMark: boolean): boolean => {
@@ -142,25 +162,13 @@ const generateMappersForInterfaces = (
 export const generateObjectsForSourcesAndTarget = (
   sourceLocation: string,
   targetLocation: string,
-): [InterfaceObject[], InterfaceObject[]] => {
-  const sourceObjects = generateObjectsForInterfacesInFile(sourceLocation)
-  const targetObjects = generateObjectsForInterfacesInFile(targetLocation)
+): [InterfaceObject[], InterfaceObject[], ImportObject[]] => {
+  const [sourceObjects, sourceImportObjects] = generateObjectsAndImportsForInterfacesInFile(sourceLocation)
+  const [targetObjects, targetImportObjects] = generateObjectsAndImportsForInterfacesInFile(targetLocation)
 
-  return [sourceObjects, targetObjects]
-}
+  const combinedImportObjects = [...sourceImportObjects, ...targetImportObjects]
 
-export const generateMapper = (
-  templateFile: string,
-  sources: InterfaceObject[],
-  targets: InterfaceObject[],
-): string => {
-  const mapperObjects = generateMappersForInterfaces(sources, targets)
-
-  const template = hb.compile(templateFile)
-
-  const mapper = template(mapperObjects)
-
-  return mapper
+  return [sourceObjects, targetObjects, combinedImportObjects]
 }
 
 const extractConfigFileEntries = (configFileContent: string): ConfigFileEntriesTuple[] => {
@@ -184,6 +192,88 @@ const extractConfigFileEntries = (configFileContent: string): ConfigFileEntriesT
   return Array.from(uniqueEntries).map((item) => JSON.parse(item)) as ConfigFileEntriesTuple[]
 }
 
+export const getImportForTheInterfaces = (
+  locationOfInterface: string,
+  interfaceNames: string[],
+  locationOfOutputFile: string,
+): string | undefined => {
+  const path = findRelativePath(locationOfOutputFile, locationOfInterface)
+  const interfaces = interfaceNames.join(', ')
+
+  if (interfaceNames.length > 0) {
+    return `import { ${interfaces} } from \"${path}\"`
+  }
+}
+
+const transformImportPaths = (importObjects: ImportObject[], outputFilePath: string): string[] => {
+  // transform relative paths in the source file to fit the relative path in the destination file of mappers
+  const transformedRelativePaths = importObjects.map((item) => {
+    let transformedPath = item.path
+
+    if (item.wasRelative) {
+      const absolutePathRelativeToSourceFile = joinPaths(item.sourceFilePath, item.path)
+      const relativePathToOutputFile = findRelativePath(outputFilePath, absolutePathRelativeToSourceFile)
+      transformedPath = relativePathToOutputFile
+    }
+
+    return item.importText.replace(item.path, transformedPath)
+  })
+  return Array.from(new Set(transformedRelativePaths))
+}
+
+export const createTemplateObject = (
+  configFileEntries: ConfigFileEntriesTuple[],
+  outputFilePath: string,
+): TemplateObject => {
+  const templateObject: TemplateObject = {
+    imports: [],
+    mappers: [],
+  }
+
+  const uniqueCombinedImports = new Set<string>()
+
+  for (const [sourceLocation, targetLocation, viceVersa] of configFileEntries) {
+    if (fs.existsSync(sourceLocation) && fs.existsSync(targetLocation)) {
+      console.log(`Mapping from source: "${sourceLocation}" to target: "${targetLocation}"`)
+
+      const [sources, targets, imports] = generateObjectsForSourcesAndTarget(sourceLocation, targetLocation)
+      const transformedImportsFromImportsInsideOfFiles = transformImportPaths(imports, outputFilePath)
+
+      const sourcesInterfaceNames = sources.map((item) => item.name)
+      const targetsInterfaceNames = targets.map((item) => item.name)
+
+      const sourcesFileImport = getImportForTheInterfaces(sourceLocation, sourcesInterfaceNames, outputFilePath)
+      const targetsFileImport = getImportForTheInterfaces(targetLocation, targetsInterfaceNames, outputFilePath)
+
+      if (sourcesFileImport) {
+        uniqueCombinedImports.add(sourcesFileImport)
+      }
+
+      if (targetsFileImport) {
+        uniqueCombinedImports.add(targetsFileImport)
+      }
+
+      transformedImportsFromImportsInsideOfFiles.forEach((item) => {
+        uniqueCombinedImports.add(item)
+      })
+
+      const mappers = generateMappersForInterfaces(sources, targets)
+      templateObject.mappers.push(...mappers)
+
+      if (viceVersa) {
+        console.log(`Mapping from source: "${targetLocation}" to target: "${sourceLocation}"`)
+
+        const viceVersaMappers = generateMappersForInterfaces(targets, sources)
+        templateObject.mappers.push(...viceVersaMappers)
+      }
+    }
+  }
+
+  templateObject.imports = Array.from(uniqueCombinedImports)
+
+  return templateObject
+}
+
 export const generateMappers = (configForMappingFilesLocation: string, outputFileLocation: string): void => {
   if (!fs.existsSync(configForMappingFilesLocation)) {
     const errorMessage = 'You need to specify a JSON config file with the mapping specification'
@@ -194,36 +284,37 @@ export const generateMappers = (configForMappingFilesLocation: string, outputFil
   const __filename = fileURLToPath(import.meta.url)
   const __dirname = path.dirname(__filename)
 
-  const mappingsFile = fs.readFileSync(configForMappingFilesLocation).toString('utf-8')
+  const configFile = fs.readFileSync(configForMappingFilesLocation).toString('utf-8')
+
   const templateFile = fs.readFileSync(path.resolve(__dirname, 'template.handlebars')).toString('utf-8')
 
   let configFileEntries: ConfigFileEntriesTuple[]
 
   try {
-    configFileEntries = extractConfigFileEntries(mappingsFile)
+    configFileEntries = extractConfigFileEntries(configFile)
   } catch (error: any) {
     console.error(error?.message)
     throw error
   }
 
+  const templateObject = createTemplateObject(configFileEntries, outputFileLocation)
+
+  const { imports, mappers } = templateObject
+
   const writer = fs.createWriteStream(outputFileLocation)
 
-  for (const [sourceLocation, targetLocation, viceVersa] of configFileEntries) {
-    if (fs.existsSync(sourceLocation) && fs.existsSync(targetLocation)) {
-      const [sources, targets] = generateObjectsForSourcesAndTarget(sourceLocation, targetLocation)
-      let mapperContent = generateMapper(templateFile, sources, targets)
-
-      console.log(`Mapping from source: "${sourceLocation}" to target: "${targetLocation}"`)
-
-      if (viceVersa) {
-        const viceVersaContent = generateMapper(templateFile, targets, sources)
-        mapperContent = mapperContent + '\n' + viceVersaContent
-
-        console.log(`Mapping from source: "${targetLocation}" to target: "${sourceLocation}"`)
-      }
-
-      writer.write(mapperContent)
-    }
+  for (const itemImport of imports) {
+    const itemImportWithNewLine = itemImport + '\n'
+    writer.write(itemImportWithNewLine)
   }
+
+  for (const mapper of mappers) {
+    const template = hb.compile(templateFile)
+
+    const mappedContent = template(mapper)
+
+    writer.write(mappedContent)
+  }
+
   writer.close()
 }
