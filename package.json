@@ -1,6 +1,6 @@
 {
   "name": "typescript-mapper",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "TypeScript mapper for objects of type A to type B and vice versa ",
   "exports": {
     "import": "./dist/mjs/index.js",
