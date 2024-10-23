@@ -9,7 +9,6 @@ import { hideBin } from 'yargs/helpers'
 type ArgvResult = Arguments<{
   config: string
   output: string
-  fontName: string
 }>
 
 const argv = yargs(hideBin(process.argv))
