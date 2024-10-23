@@ -14,6 +14,14 @@ import { escapeQuotationMarks, isArray, isObjectOfTypeSourceTargetLocations } fr
 import * as ts from 'typescript'
 import { fileURLToPath } from 'url'
 
+const UNION_TOKEN = '|'
+
+/**
+ * Generates the objects representation of the interfaces of the file, and the imports which are used in the file
+ *
+ * @param fileLocation - the path of the file where the interfaces are located
+ * @returns tuple of the objects representing the interfaces, and the imports used in the file
+ */
 const generateObjectsAndImportsForInterfacesInFile = (fileLocation: string): [InterfaceObject[], ImportObject[]] => {
   const program = ts.createProgram([fileLocation], { allowJs: true, strictNullChecks: true })
   const typeChecker = program.getTypeChecker()
@@ -65,6 +73,13 @@ const generateObjectsAndImportsForInterfacesInFile = (fileLocation: string): [In
   return [interfaceObjects, importObjects]
 }
 
+/**
+ * Checks if a given type is nullable.
+ *
+ * @param type - the type of the prop
+ * @param hasQuestionMark - if the prop has '?'
+ * @returns the result if given type is nullable
+ */
 const isTypeNullable = (type: string | null | undefined, hasQuestionMark: boolean): boolean => {
   if (type === undefined || type === null || hasQuestionMark === undefined || hasQuestionMark === null) {
     return false
@@ -72,27 +87,39 @@ const isTypeNullable = (type: string | null | undefined, hasQuestionMark: boolea
   return type.indexOf('null') !== -1 || type.indexOf('undefined') !== -1 || hasQuestionMark
 }
 
+/**
+ * Given prop object, it returns the type of the prop
+ *
+ * @param prop - the prop object
+ * @returns string representation of the return type
+ */
 const getReturnType = (prop: PropObject): string => {
-  return prop.hasQuestionMark ? prop.type + ' | undefined' : prop.type
+  return prop.hasQuestionMark ? `${prop.type} ${UNION_TOKEN} undefined` : prop.type
 }
 
+/**
+ * Given a prop type, it removes the nullable types if the prop type is of type union
+ *
+ * @param type - the given prop type
+ * @returns the union type without nullables, if it exists
+ */
 const filterNullableUnionTypes = (type?: PropObject['type']): string | undefined => {
-  // TODO: extract this into global variable
-  const unionType = '|'
   const filteredTypes = type
-    ?.split(unionType)
+    ?.split(UNION_TOKEN)
     .map((item) => item.trim())
     .filter((type) => type !== 'undefined' && type !== 'null')
-    .join(unionType)
+    .join(UNION_TOKEN)
 
   return filteredTypes
 }
 
-// from -> to
-// if from is nullable and to expects non nullable -> we add custom value (dont map but expect customMap)
-// if from is nullable and to is nullable -> can be mapped
-// if from is not nullable and to is nullable -> can be mapped
-// if from is not nullable and to is not nullable -> can be mapped
+/**
+ * Generates MapperObjects given the source and target object representations of the interfaces
+ *
+ * @param sourceObjects the interface objects of the source
+ * @param targetObjects the interface objects of the target
+ * @returns an array of the MapperObject
+ */
 const generateMappersForInterfaces = (
   sourceObjects: InterfaceObject[],
   targetObjects: InterfaceObject[],
@@ -131,7 +158,6 @@ const generateMappersForInterfaces = (
         const sourcePropNullable = isTypeNullable(sourcePropType, sourceProp?.hasQuestionMark)
 
         if (prop in sourceObjectProps && targetPropTypeWithoutNullableTypes === sourcePropTypeWithoutNullableTypes) {
-          // TODO: refactor this
           // if from is nullable and to expects non nullable -> we add custom value (dont map but expect customMap)
           if (sourcePropNullable && !targetPropNullable) {
             customMapProps.push({
@@ -158,7 +184,14 @@ const generateMappersForInterfaces = (
 
   return mapperObjects
 }
-
+/**
+ *
+ * Generates interface objects and the imports given the paths for the source and the target
+ *
+ * @param sourceLocation the path of the source interfaces
+ * @param targetLocation the path of the destination interfaces
+ * @returns tuple of source interface objects, target interface objects and imports
+ */
 export const generateObjectsForSourcesAndTarget = (
   sourceLocation: string,
   targetLocation: string,
@@ -171,6 +204,12 @@ export const generateObjectsForSourcesAndTarget = (
   return [sourceObjects, targetObjects, combinedImportObjects]
 }
 
+/**
+ * Validates and extracts the contents of the specification json file
+ *
+ * @param configFileContent the json config file which specifies what needs to be generated
+ * @returns the config file entries
+ */
 const extractConfigFileEntries = (configFileContent: string): ConfigFileEntriesTuple[] => {
   const tuplesArray: Array<ConfigFileEntriesTuple> = []
 
@@ -192,6 +231,15 @@ const extractConfigFileEntries = (configFileContent: string): ConfigFileEntriesT
   return Array.from(uniqueEntries).map((item) => JSON.parse(item)) as ConfigFileEntriesTuple[]
 }
 
+/**
+ * Generates import statement with the passed interface from the given location and parses the
+ * relative location of the output file
+ *
+ * @param locationOfInterface the location of the interface
+ * @param interfaceNames the names of the interfaces that we want to import
+ * @param locationOfOutputFile the output file location
+ * @returns the import text
+ */
 export const getImportForTheInterfaces = (
   locationOfInterface: string,
   interfaceNames: string[],
@@ -205,8 +253,14 @@ export const getImportForTheInterfaces = (
   }
 }
 
+/**
+ * Transforms the import objects to import strings relative to the output file path.
+ *
+ * @param importObjects the import objects
+ * @param outputFilePath the outputFile path
+ * @returns the array of imports as strings
+ */
 const transformImportPaths = (importObjects: ImportObject[], outputFilePath: string): string[] => {
-  // transform relative paths in the source file to fit the relative path in the destination file of mappers
   const transformedRelativePaths = importObjects.map((item) => {
     let transformedPath = item.path
 
@@ -221,6 +275,14 @@ const transformImportPaths = (importObjects: ImportObject[], outputFilePath: str
   return Array.from(new Set(transformedRelativePaths))
 }
 
+/**
+ * Given config file entries, and the output file path, it creates template objecte used for
+ * templating in handlebars
+ *
+ * @param configFileEntries the config file entries
+ * @param outputFilePath the output file path
+ * @returns a template object
+ */
 export const createTemplateObject = (
   configFileEntries: ConfigFileEntriesTuple[],
   outputFilePath: string,
@@ -274,6 +336,12 @@ export const createTemplateObject = (
   return templateObject
 }
 
+/**
+ * Given the config file location and the output file location, generate the mappers in the output file location
+ *
+ * @param configForMappingFilesLocation the config path of the mapping spec
+ * @param outputFileLocation the location where the mappers will be saved
+ */
 export const generateMappers = (configForMappingFilesLocation: string, outputFileLocation: string): void => {
   if (!fs.existsSync(configForMappingFilesLocation)) {
     const errorMessage = 'You need to specify a JSON config file with the mapping specification'
