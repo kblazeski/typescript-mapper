@@ -45,5 +45,5 @@ CLI Props:
 
 
 >[!IMPORTANT]
-> The mappers generates only for exported `interface`. Currently the typescript `type` is not supported.
+> The mappers are generated only for exported `interface`. Currently the typescript `type` is not supported.
 
